@@ -24,7 +24,7 @@ app.use(helmet({
 // CORS
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map(o => o.trim())
+    .map(origin => origin.trim())
     .filter(Boolean);
 
 app.use(cors({
