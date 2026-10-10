@@ -1,5 +1,5 @@
 /* =========================================================
-   Mudrik Dau Portfolio — Backend Server
+   Mudrik Dau Portfolio - Backend Server
    ========================================================= */
 
 require('dotenv').config();
@@ -16,45 +16,85 @@ const contactRoutes = require('./routes/contact');
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
-/* ---------- Middleware ---------- */
-app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' }
-}));
+/* ---------- Security Middleware ---------- */
 
-// CORS
+app.use(
+    helmet({
+        crossOriginResourcePolicy: {
+            policy: 'cross-origin'
+        }
+    })
+);
+
+/* ---------- CORS Configuration ---------- */
+
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map(origin => origin.trim())
+    .map((origin) => origin.trim())
     .filter(Boolean);
 
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (Postman, curl, same-origin)
-        if (!origin) return callback(null, true);
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            // Allow requests without an Origin header,
+            // such as Postman and server-side requests.
+            if (!origin) {
+                return callback(null, true);
+            }
 
-        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
+            // Allow configured website origins.
+            if (
+                allowedOrigins.length === 0 ||
+                allowedOrigins.includes(origin)
+            ) {
+                return callback(null, true);
+            }
 
-        // Allow localhost on any port during development
-        if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-            return callback(null, true);
-        }
+            // Allow localhost during development only.
+            if (
+                process.env.NODE_ENV !== 'production' &&
+                /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+            ) {
+                return callback(null, true);
+            }
 
-        return callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true
-}));
+            return callback(new Error('Not allowed by CORS'));
+        },
+        credentials: true
+    })
+);
 
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+/* ---------- Request Parsing ---------- */
 
-/* ---------- Routes ---------- */
+app.use(
+    express.json({
+        limit: '100kb'
+    })
+);
+
+app.use(
+    express.urlencoded({
+        extended: true,
+        limit: '100kb'
+    })
+);
+
+/* ---------- Request Logging ---------- */
+
+app.use(
+    morgan(
+        process.env.NODE_ENV === 'production'
+            ? 'combined'
+            : 'dev'
+    )
+);
+
+/* ---------- Root Route ---------- */
+
 app.get('/', (req, res) => {
-    res.json({
+    res.status(200).json({
         ok: true,
-        message: 'Mudrik Dau Portfolio Backend — running',
+        message: 'Mudrik Dau Portfolio Backend - running',
         endpoints: {
             health: 'GET /api/health',
             contact: 'POST /api/contact'
@@ -62,51 +102,95 @@ app.get('/', (req, res) => {
     });
 });
 
-app.get('/api/health', async (req, res) => {
-    const dbOk = await testConnection();
-    const mailOk = await verifyMailer();
-    res.json({
-        ok: dbOk && mailOk,
-        database: dbOk ? 'connected' : 'failed',
-        mailer: mailOk ? 'connected' : 'failed',
+/* ---------- Health Check ---------- */
+
+// Respond immediately so Render can check the HTTP service
+// without waiting for MySQL or SMTP connection checks.
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        ok: true,
+        service: 'Mudrik Dau Portfolio Backend',
+        status: 'healthy',
         timestamp: new Date().toISOString()
     });
 });
 
+/* ---------- Contact Routes ---------- */
+
 app.use('/api/contact', contactRoutes);
 
-/* ---------- 404 ---------- */
+/* ---------- 404 Handler ---------- */
+
 app.use((req, res) => {
-    res.status(404).json({ ok: false, message: 'Route not found.' });
+    res.status(404).json({
+        ok: false,
+        message: 'Route not found.'
+    });
 });
 
-/* ---------- Error handler ---------- */
+/* ---------- Error Handler ---------- */
+
 app.use((err, req, res, next) => {
     console.error('[Error]', err.message);
+
     res.status(err.status || 500).json({
         ok: false,
         message: err.message || 'Internal server error.'
     });
 });
 
-/* ---------- Boot ---------- */
+/* ---------- Server Startup ---------- */
+
 async function start() {
     console.log('\n=======================================');
-    console.log('  Mudrik Dau Portfolio — Backend');
+    console.log('  Mudrik Dau Portfolio - Backend');
     console.log('=======================================\n');
 
-    await testConnection();
-    await verifyMailer();
+    // Start the HTTP server without waiting for external services.
+    const server = app.listen(PORT, () => {
+        console.log(`\n[SERVER] Listening on port ${PORT}`);
 
-    app.listen(PORT, () => {
-        console.log(`\n[SERVER] Listening on http://localhost:${PORT}`);
-        console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(`[SERVER] Allowed origins: ${allowedOrigins.join(', ') || '(any)'}`);
+        console.log(
+            `[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`
+        );
+
+        console.log(
+            `[SERVER] Allowed origins: ${
+                allowedOrigins.join(', ') || '(any)'
+            }`
+        );
+
         console.log('\nEndpoints:');
-        console.log(`  GET   http://localhost:${PORT}/api/health`);
-        console.log(`  POST  http://localhost:${PORT}/api/contact\n`);
+        console.log('  GET   /');
+        console.log('  GET   /api/health');
+        console.log('  POST  /api/contact\n');
+    });
+
+    server.on('error', (err) => {
+        console.error('[SERVER] Failed to start:', err.message);
+        process.exitCode = 1;
+    });
+
+    // Test MySQL in the background.
+    // Database failures will not block the HTTP health check.
+    testConnection().catch((err) => {
+        console.error(
+            '[DB] Unexpected connection check error:',
+            err.message
+        );
+    });
+
+    // Verify SMTP in the background.
+    // SMTP failures will not block server startup.
+    verifyMailer().catch((err) => {
+        console.error(
+            '[MAIL] Unexpected verification error:',
+            err.message
+        );
     });
 }
+
+/* ---------- Start Application ---------- */
 
 start().catch((err) => {
     console.error('[FATAL] Failed to start server:', err);
