@@ -16,6 +16,10 @@ const contactRoutes = require('./routes/contact');
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
+/* ---------- Trust Proxy ---------- */
+
+app.set('trust proxy', 1);
+
 /* ---------- Security Middleware ---------- */
 
 app.use(
