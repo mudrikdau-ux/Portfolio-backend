@@ -184,8 +184,8 @@ async function start() {
         );
     });
 
-    // Verify SMTP in the background.
-    // SMTP failures will not block server startup.
+    // Verify Resend email API in the background.
+    // Mail failures will not block server startup.
     verifyMailer().catch((err) => {
         console.error(
             '[MAIL] Unexpected verification error:',
